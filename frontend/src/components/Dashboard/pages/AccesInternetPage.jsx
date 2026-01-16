@@ -30,26 +30,89 @@ import {
   MenuItem,
   Divider,
   CircularProgress,
-  Backdrop
+  Backdrop,
+  Avatar,
+  Badge
 } from '@mui/material';
 import {
   Check as CheckIcon,
-  Delete as DeleteIcon,
   Wifi as WifiIcon,
   Block as BlockIcon,
   Search as SearchIcon,
   Computer as ComputerIcon,
+  Smartphone as SmartphoneIcon,
+  Tv as TvIcon,
+  Print as PrintIcon,
+  Router as RouterIcon,
   CheckCircle as CheckCircleIcon,
-  AttachMoney as MoneyIcon,
-  AccessTime as TimeIcon,
   HourglassEmpty as HourglassEmptyIcon,
   Cancel as CancelIcon,
   Refresh as RefreshIcon,
   Error as ErrorIcon,
-  Cached as CachedIcon
+  Cached as CachedIcon,
+  VerifiedUser as VerifiedIcon,
+  Security as SecurityIcon
 } from '@mui/icons-material';
 import { appareilService } from '../../../services/appareilService';
 import { offreService } from '../../../services/offreService';
+
+// Mapper les catégories aux icônes Material-UI
+const getDeviceIcon = (categorie, iconeEmoji) => {
+  const emojiToIcon = {
+    '📱': <SmartphoneIcon />,
+    '💻': <ComputerIcon />,
+    '📺': <TvIcon />,
+    '🖨️': <PrintIcon />,
+    '🛜': <RouterIcon />,
+    '🖥️': <ComputerIcon />,
+    '🔌': <SmartphoneIcon />
+  };
+  
+  // Si on a une icône emoji, l'utiliser
+  if (iconeEmoji && emojiToIcon[iconeEmoji]) {
+    return emojiToIcon[iconeEmoji];
+  }
+  
+  // Sinon, utiliser la catégorie
+  switch(categorie?.toLowerCase()) {
+    case 'mobile':
+    case 'tablette':
+      return <SmartphoneIcon />;
+    case 'ordinateur':
+    case 'serveur':
+      return <ComputerIcon />;
+    case 'tv':
+      return <TvIcon />;
+    case 'imprimante':
+      return <PrintIcon />;
+    case 'routeur':
+      return <RouterIcon />;
+    default:
+      return <SmartphoneIcon />;
+  }
+};
+
+// Obtenir la couleur du statut
+const getStatusColor = (status) => {
+  switch(status) {
+    case 'actif': return 'success';
+    case 'inactif': return 'default';
+    case 'en_attente': return 'warning';
+    case 'bloque': return 'error';
+    default: return 'default';
+  }
+};
+
+// Obtenir le texte du statut
+const getStatusText = (status) => {
+  switch(status) {
+    case 'actif': return 'Actif';
+    case 'inactif': return 'Inactif';
+    case 'en_attente': return 'En attente';
+    case 'bloque': return 'Bloqué';
+    default: return 'Inconnu';
+  }
+};
 
 const AccesInternetPage = () => {
   const [appareils, setAppareils] = useState([]);
@@ -87,12 +150,33 @@ const AccesInternetPage = () => {
     setLoading(true);
     try {
       const response = await appareilService.getAll();
-      if (response.success) {
-        setAppareils(response.data);
+      console.log('Réponse API appareils:', response);
+      
+      if (response && response.success) {
+        // Le nouveau format retourne directement response.data (avec pagination)
+        let appareilsData = [];
+        
+        if (response.data && response.data.data && Array.isArray(response.data.data)) {
+          // Format paginé: { success: true, data: { data: [...], meta: {...} } }
+          appareilsData = response.data.data;
+        } else if (response.data && Array.isArray(response.data)) {
+          // Format simple: { success: true, data: [...] }
+          appareilsData = response.data;
+        } else if (Array.isArray(response)) {
+          // Format brut: [...]
+          appareilsData = response;
+        }
+        
+        console.log('Données appareils traitées:', appareilsData);
+        setAppareils(appareilsData);
+      } else {
+        console.warn('Réponse API sans succès:', response);
+        setAppareils([]);
       }
     } catch (error) {
       console.error('Erreur chargement appareils:', error);
       showSnackbar('Erreur lors du chargement des appareils', 'error');
+      setAppareils([]);
     } finally {
       setLoading(false);
     }
@@ -101,11 +185,14 @@ const AccesInternetPage = () => {
   const fetchOffres = async () => {
     try {
       const response = await offreService.getAll();
-      if (response.success) {
-        setOffres(response.data);
+      if (response && response.success) {
+        setOffres(response.data || []);
+      } else {
+        setOffres([]);
       }
     } catch (error) {
       console.error('Erreur chargement offres:', error);
+      setOffres([]);
     }
   };
 
@@ -125,9 +212,11 @@ const AccesInternetPage = () => {
     setScanning(true);
     try {
       const response = await appareilService.scanner();
-      if (response.success) {
+      if (response && response.success) {
         showSnackbar(response.message, 'success');
         await fetchAppareils(); // Recharger la liste
+      } else {
+        showSnackbar(response?.message || 'Erreur lors du scan', 'error');
       }
     } catch (error) {
       console.error('Erreur scan:', error);
@@ -138,7 +227,9 @@ const AccesInternetPage = () => {
   };
 
   // Filtrer seulement les appareils en attente
-  const appareilsEnAttente = appareils.filter(a => a.statut === 'en_attente');
+  const appareilsEnAttente = Array.isArray(appareils) 
+    ? appareils.filter(a => a && a.statut === 'en_attente')
+    : [];
 
   const handleBloquer = (id) => {
     const appareil = getAppareilById(id);
@@ -160,12 +251,20 @@ const AccesInternetPage = () => {
   };
 
   const filteredAppareils = () => {
-    return appareilsEnAttente.filter(appareil =>
-      (appareil.ip && appareil.ip.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (appareil.mac && appareil.mac.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (appareil.nom && appareil.nom.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (appareil.description && appareil.description.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    if (!Array.isArray(appareilsEnAttente)) return [];
+    
+    return appareilsEnAttente.filter(appareil => {
+      if (!appareil) return false;
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        (appareil.ip && appareil.ip.toLowerCase().includes(searchLower)) ||
+        (appareil.mac && appareil.mac.toLowerCase().includes(searchLower)) ||
+        (appareil.nom && appareil.nom.toLowerCase().includes(searchLower)) ||
+        (appareil.fabricant && appareil.fabricant.toLowerCase().includes(searchLower)) ||
+        (appareil.categorie && appareil.categorie.toLowerCase().includes(searchLower)) ||
+        (appareil.description && appareil.description.toLowerCase().includes(searchLower))
+      );
+    });
   };
 
   const confirmerActivation = async () => {
@@ -195,10 +294,13 @@ const AccesInternetPage = () => {
 
         const response = await appareilService.activer(openActiverDialog, offreData);
         
-        if (response.success) {
+        if (response && response.success) {
           showSnackbar(response.message, 'success');
           // Retirer l'appareil de la liste des en attente
-          setAppareils(prev => prev.filter(a => a.id !== openActiverDialog));
+          setAppareils(prev => {
+            if (!Array.isArray(prev)) return [];
+            return prev.filter(a => a && a.id !== openActiverDialog);
+          });
           
           // Fermer le dialog
           setOpenActiverDialog(null);
@@ -206,6 +308,8 @@ const AccesInternetPage = () => {
           setSelectedOffre('');
           setDureePersonnalisee('24h');
           setMontantPersonnalise(5000);
+        } else {
+          showSnackbar(response?.message || 'Erreur lors de l\'activation', 'error');
         }
       } catch (error) {
         console.error('Erreur activation:', error);
@@ -222,13 +326,18 @@ const AccesInternetPage = () => {
       try {
         const response = await appareilService.bloquer(openBloquerDialog);
         
-        if (response.success) {
+        if (response && response.success) {
           showSnackbar(response.message, 'success');
           // Retirer l'appareil de la liste
-          setAppareils(prev => prev.filter(a => a.id !== openBloquerDialog));
+          setAppareils(prev => {
+            if (!Array.isArray(prev)) return [];
+            return prev.filter(a => a && a.id !== openBloquerDialog);
+          });
           
           setOpenBloquerDialog(null);
           setAppareilDetails(null);
+        } else {
+          showSnackbar(response?.message || 'Erreur lors du blocage', 'error');
         }
       } catch (error) {
         console.error('Erreur blocage:', error);
@@ -240,7 +349,8 @@ const AccesInternetPage = () => {
   };
 
   const getAppareilById = (id) => {
-    return appareils.find(a => a.id === id);
+    if (!Array.isArray(appareils)) return null;
+    return appareils.find(a => a && a.id === id);
   };
 
   const handleOffreChange = (event) => {
@@ -268,27 +378,77 @@ const AccesInternetPage = () => {
   };
 
   const handleMontantChange = (event) => {
-    setMontantPersonnalise(parseFloat(event.target.value) || 0);
+    const value = parseFloat(event.target.value);
+    setMontantPersonnalise(isNaN(value) ? 0 : value);
   };
 
   const calculerTotal = () => {
     if (selectedOffre) {
       const offre = offres.find(o => o.id === parseInt(selectedOffre));
-      return offre ? offre.montant : 0;
+      return offre ? (offre.montant || 0) : 0;
     }
     return montantPersonnalise || 0;
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return 'Date invalide';
+    }
+  };
+
+  // Formater le nom de l'appareil pour l'affichage
+  const formatDeviceName = (appareil) => {
+    if (!appareil) return 'Appareil inconnu';
+    
+    // Si on a display_name_with_icon, l'utiliser
+    if (appareil.display_name_with_icon) {
+      return appareil.display_name_with_icon;
+    }
+    
+    // Sinon construire le nom
+    let name = appareil.nom || 'Appareil';
+    if (appareil.fabricant && !name.includes(appareil.fabricant)) {
+      name = `${appareil.fabricant} ${name}`;
+    }
+    return name;
+  };
+
+  // Obtenir la couleur de l'avatar basée sur la catégorie
+  const getAvatarColor = (categorie) => {
+    switch(categorie?.toLowerCase()) {
+      case 'mobile': return '#4caf50';
+      case 'tablette': return '#2196f3';
+      case 'ordinateur': return '#ff9800';
+      case 'tv': return '#9c27b0';
+      case 'imprimante': return '#795548';
+      case 'routeur': return '#3f51b5';
+      case 'serveur': return '#f44336';
+      default: return '#757575';
+    }
+  };
+
+  // Obtenir le texte court de la catégorie
+  const getShortCategory = (categorie) => {
+    switch(categorie?.toLowerCase()) {
+      case 'mobile': return 'Mob';
+      case 'tablette': return 'Tab';
+      case 'ordinateur': return 'PC';
+      case 'tv': return 'TV';
+      case 'imprimante': return 'Imp';
+      case 'routeur': return 'Rtr';
+      case 'serveur': return 'Srv';
+      default: return 'Autre';
+    }
   };
 
   if (loading) {
@@ -363,16 +523,25 @@ const AccesInternetPage = () => {
           />
           <Chip
             icon={<ComputerIcon />}
-            label={`${appareils.length} appareil(s) total`}
+            label={`${Array.isArray(appareils) ? appareils.length : 0} appareil(s) total`}
             variant="outlined"
             sx={{ fontWeight: 600 }}
           />
+          {appareilsEnAttente.some(a => a.trusted_device) && (
+            <Chip
+              icon={<VerifiedIcon />}
+              label={`${appareilsEnAttente.filter(a => a.trusted_device).length} appareil(s) approuvé(s)`}
+              color="success"
+              variant="outlined"
+              sx={{ fontWeight: 600 }}
+            />
+          )}
         </Box>
 
         {/* Barre de recherche */}
         <TextField
           fullWidth
-          placeholder="Rechercher par IP, MAC, nom ou description..."
+          placeholder="Rechercher par IP, MAC, nom, fabricant ou catégorie..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           sx={{ mb: 3 }}
@@ -432,6 +601,7 @@ const AccesInternetPage = () => {
                   <TableCell sx={{ fontWeight: 600 }}>Appareil</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Adresse IP</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Adresse MAC</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Statut</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Date détection</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
@@ -439,16 +609,66 @@ const AccesInternetPage = () => {
               </TableHead>
               <TableBody>
                 {filteredAppareils().map((appareil) => (
-                  <TableRow key={appareil.id} hover sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                  <TableRow 
+                    key={appareil?.id || Math.random()} 
+                    hover 
+                    sx={{ '&:hover': { bgcolor: 'action.hover' } }}
+                  >
                     <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ComputerIcon fontSize="small" color="action" />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Badge
+                          color="success"
+                          variant="dot"
+                          invisible={!appareil?.trusted_device}
+                          anchorOrigin={{
+                            vertical: 'bottom',
+                            horizontal: 'right',
+                          }}
+                        >
+                          <Avatar
+                            sx={{
+                              bgcolor: getAvatarColor(appareil?.categorie),
+                              width: 40,
+                              height: 40,
+                              fontSize: '0.9rem'
+                            }}
+                          >
+                            {getShortCategory(appareil?.categorie)}
+                          </Avatar>
+                        </Badge>
                         <Box>
-                          <Typography fontWeight={500}>
-                            {appareil.nom || 'Appareil inconnu'}
-                          </Typography>
-                          {appareil.description && (
-                            <Typography variant="caption" color="text.secondary">
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                            <Typography fontWeight={600}>
+                              {formatDeviceName(appareil)}
+                            </Typography>
+                            {appareil?.trusted_device && (
+                              <VerifiedIcon fontSize="small" color="success" />
+                            )}
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            {appareil?.fabricant && (
+                              <Chip
+                                label={appareil.fabricant}
+                                size="small"
+                                variant="outlined"
+                                sx={{ height: 20, fontSize: '0.7rem' }}
+                              />
+                            )}
+                            {appareil?.categorie && (
+                              <Chip
+                                label={appareil.categorie}
+                                size="small"
+                                sx={{ 
+                                  height: 20, 
+                                  fontSize: '0.7rem',
+                                  bgcolor: getAvatarColor(appareil.categorie) + '20',
+                                  color: getAvatarColor(appareil.categorie)
+                                }}
+                              />
+                            )}
+                          </Box>
+                          {appareil?.description && (
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
                               {appareil.description}
                             </Typography>
                           )}
@@ -456,42 +676,59 @@ const AccesInternetPage = () => {
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                        {appareil.ip || 'N/A'}
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                        {appareil?.ip || 'N/A'}
                       </Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                        {appareil.mac || 'N/A'}
+                        {appareil?.mac || 'N/A'}
                       </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {getDeviceIcon(appareil?.categorie, appareil?.icone)}
+                        <Typography variant="body2">
+                          {appareil?.categorie || 'Inconnu'}
+                        </Typography>
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Chip
                         icon={<HourglassEmptyIcon />}
-                        label="En attente"
-                        color="warning"
+                        label={getStatusText(appareil?.statut)}
+                        color={getStatusColor(appareil?.statut)}
                         size="small"
                         sx={{ borderRadius: 1 }}
                       />
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
-                        {formatDate(appareil.created_at)}
+                        {formatDate(appareil?.created_at)}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Tooltip title="Activer l'accès">
-                          <Button
-                            variant="contained"
-                            color="primary"
-                            size="small"
-                            startIcon={<WifiIcon />}
-                            onClick={() => handleActiver(appareil.id)}
-                            disabled={loadingAction}
-                          >
-                            Activer
-                          </Button>
+                        <Tooltip title={appareil?.trusted_device ? "Appareil approuvé - Activer l'accès" : "Activer l'accès"}>
+                          <span>
+                            <Button
+                              variant="contained"
+                              color={appareil?.trusted_device ? "success" : "primary"}
+                              size="small"
+                              startIcon={appareil?.trusted_device ? <VerifiedIcon /> : <WifiIcon />}
+                              onClick={() => appareil && handleActiver(appareil.id)}
+                              disabled={loadingAction || !appareil}
+                              sx={{ 
+                                minWidth: '100px',
+                                ...(appareil?.trusted_device && {
+                                  bgcolor: 'success.main',
+                                  '&:hover': { bgcolor: 'success.dark' }
+                                })
+                              }}
+                            >
+                              {appareil?.trusted_device ? 'Approuver' : 'Activer'}
+                            </Button>
+                          </span>
                         </Tooltip>
                         <Tooltip title="Refuser l'accès">
                           <Button
@@ -499,8 +736,8 @@ const AccesInternetPage = () => {
                             color="error"
                             size="small"
                             startIcon={<BlockIcon />}
-                            onClick={() => handleBloquer(appareil.id)}
-                            disabled={loadingAction}
+                            onClick={() => appareil && handleBloquer(appareil.id)}
+                            disabled={loadingAction || !appareil}
                           >
                             Bloquer
                           </Button>
@@ -548,26 +785,91 @@ const AccesInternetPage = () => {
             <>
               <Grid container spacing={2}>
                 <Grid item xs={12}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>
-                    Informations de l'appareil
-                  </Typography>
-                  <Stack spacing={1}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography color="text.secondary">Nom</Typography>
-                      <Typography fontWeight={500}>{appareilDetails.nom || 'Inconnu'}</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                    <Avatar
+                      sx={{
+                        bgcolor: getAvatarColor(appareilDetails?.categorie),
+                        width: 50,
+                        height: 50,
+                        fontSize: '1rem'
+                      }}
+                    >
+                      {getShortCategory(appareilDetails?.categorie)}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        {formatDeviceName(appareilDetails)}
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                        {appareilDetails?.fabricant && (
+                          <Chip
+                            label={appareilDetails.fabricant}
+                            size="small"
+                            variant="outlined"
+                          />
+                        )}
+                        {appareilDetails?.categorie && (
+                          <Chip
+                            label={appareilDetails.categorie}
+                            size="small"
+                            sx={{ 
+                              bgcolor: getAvatarColor(appareilDetails.categorie) + '20',
+                              color: getAvatarColor(appareilDetails.categorie)
+                            }}
+                          />
+                        )}
+                        {appareilDetails?.trusted_device && (
+                          <Chip
+                            icon={<VerifiedIcon />}
+                            label="Approuvé"
+                            color="success"
+                            size="small"
+                          />
+                        )}
+                      </Box>
                     </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography color="text.secondary">Adresse IP</Typography>
-                      <Typography sx={{ fontFamily: 'monospace' }}>{appareilDetails.ip}</Typography>
+                  </Box>
+                  
+                  <Stack spacing={2}>
+                    <Box>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Informations réseau
+                      </Typography>
+                      <Grid container spacing={1}>
+                        <Grid item xs={6}>
+                          <Typography variant="body2">Adresse IP:</Typography>
+                          <Typography sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                            {appareilDetails.ip}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="body2">Adresse MAC:</Typography>
+                          <Typography sx={{ fontFamily: 'monospace' }}>
+                            {appareilDetails.mac || 'N/A'}
+                          </Typography>
+                        </Grid>
+                      </Grid>
                     </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography color="text.secondary">Adresse MAC</Typography>
-                      <Typography sx={{ fontFamily: 'monospace' }}>{appareilDetails.mac || 'N/A'}</Typography>
-                    </Box>
+                    
                     {appareilDetails.description && (
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography color="text.secondary">Description</Typography>
-                        <Typography>{appareilDetails.description}</Typography>
+                      <Box>
+                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                          Description
+                        </Typography>
+                        <Typography variant="body2">
+                          {appareilDetails.description}
+                        </Typography>
+                      </Box>
+                    )}
+                    
+                    {appareilDetails.dernier_scan && (
+                      <Box>
+                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                          Dernière détection
+                        </Typography>
+                        <Typography variant="body2">
+                          {formatDate(appareilDetails.dernier_scan)}
+                        </Typography>
                       </Box>
                     )}
                   </Stack>
@@ -663,6 +965,11 @@ const AccesInternetPage = () => {
                     L'accès internet sera activé immédiatement après confirmation.
                     L'appareil sera retiré de la liste des en attente.
                   </Alert>
+                  {appareilDetails?.trusted_device && (
+                    <Alert severity="success" sx={{ mt: 1 }}>
+                      Cet appareil est marqué comme approuvé. L'accès peut être activé en toute confiance.
+                    </Alert>
+                  )}
                 </Grid>
               </Grid>
             </>
@@ -687,6 +994,11 @@ const AccesInternetPage = () => {
             onClick={confirmerActivation}
             startIcon={loadingAction ? <CircularProgress size={20} color="inherit" /> : <CheckIcon />}
             disabled={loadingAction || (!selectedOffre && (!dureePersonnalisee || !montantPersonnalise))}
+            color={appareilDetails?.trusted_device ? "success" : "primary"}
+            sx={appareilDetails?.trusted_device ? {
+              bgcolor: 'success.main',
+              '&:hover': { bgcolor: 'success.dark' }
+            } : {}}
           >
             {loadingAction ? 'Traitement...' : 'Confirmer l\'activation'}
           </Button>
@@ -720,26 +1032,63 @@ const AccesInternetPage = () => {
                 L'appareil n'aura pas accès à internet et devra redemander l'accès.
               </Alert>
               <Stack spacing={2}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Avatar
+                    sx={{
+                      bgcolor: getAvatarColor(appareilDetails?.categorie),
+                      width: 50,
+                      height: 50,
+                      fontSize: '1rem'
+                    }}
+                  >
+                    {getShortCategory(appareilDetails?.categorie)}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      {formatDeviceName(appareilDetails)}
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                      {appareilDetails?.fabricant && (
+                        <Chip
+                          label={appareilDetails.fabricant}
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
+                      {appareilDetails?.categorie && (
+                        <Chip
+                          label={appareilDetails.categorie}
+                          size="small"
+                          sx={{ 
+                            bgcolor: getAvatarColor(appareilDetails.categorie) + '20',
+                            color: getAvatarColor(appareilDetails.categorie)
+                          }}
+                        />
+                      )}
+                    </Box>
+                  </Box>
+                </Box>
+                
                 <Stack spacing={1}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
-                    Appareil concerné
-                  </Typography>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography color="text.secondary">Nom</Typography>
-                    <Typography fontWeight={500}>{appareilDetails.nom || 'Inconnu'}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography color="text.secondary">Adresse IP</Typography>
-                    <Typography sx={{ fontFamily: 'monospace' }}>{appareilDetails.ip}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography color="text.secondary">Adresse MAC</Typography>
-                    <Typography sx={{ fontFamily: 'monospace' }}>{appareilDetails.mac || 'N/A'}</Typography>
-                  </Box>
+                  <Grid container spacing={1}>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Adresse IP:</Typography>
+                      <Typography sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                        {appareilDetails.ip}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Adresse MAC:</Typography>
+                      <Typography sx={{ fontFamily: 'monospace' }}>
+                        {appareilDetails.mac || 'N/A'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                  
                   {appareilDetails.description && (
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography color="text.secondary">Description</Typography>
-                      <Typography>{appareilDetails.description}</Typography>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">Description:</Typography>
+                      <Typography variant="body2">{appareilDetails.description}</Typography>
                     </Box>
                   )}
                 </Stack>
@@ -748,6 +1097,11 @@ const AccesInternetPage = () => {
                   L'utilisateur pourra faire une nouvelle demande d'accès ultérieurement.
                   L'appareil sera retiré de la liste des en attente.
                 </Alert>
+                {appareilDetails?.trusted_device && (
+                  <Alert severity="error">
+                    ⚠️ Cet appareil est marqué comme approuvé. Êtes-vous sûr de vouloir le bloquer ?
+                  </Alert>
+                )}
               </Stack>
             </>
           )}
