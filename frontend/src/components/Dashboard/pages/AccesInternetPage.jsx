@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// src/pages/AccesInternetPage.jsx
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -27,7 +28,9 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Divider
+  Divider,
+  CircularProgress,
+  Backdrop
 } from '@mui/material';
 import {
   Check as CheckIcon,
@@ -40,170 +43,199 @@ import {
   AttachMoney as MoneyIcon,
   AccessTime as TimeIcon,
   HourglassEmpty as HourglassEmptyIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  Refresh as RefreshIcon,
+  Error as ErrorIcon,
+  Cached as CachedIcon
 } from '@mui/icons-material';
-
-// Données statiques pour les appareils EN ATTENTE uniquement
-const initialAppareils = [
-  { 
-    id: 1, 
-    ip: '192.168.1.101', 
-    mac: '00:1A:2B:3C:4D:10', 
-    statut: 'en_attente', 
-    montant: 5000, 
-    duree: '24h', 
-    created_at: '2024-01-15 10:30:00',
-    nom: 'PC Bureau',
-    type: 'Ordinateur',
-    utilisateur: 'Jean Dupont'
-  },
-  { 
-    id: 2, 
-    ip: '192.168.1.102', 
-    mac: '00:1A:2B:3C:4D:11', 
-    statut: 'en_attente', 
-    montant: 3000, 
-    duree: '12h', 
-    created_at: '2024-01-15 11:15:00',
-    nom: 'Smartphone Jean',
-    type: 'Mobile',
-    utilisateur: 'Marie Martin'
-  },
-  { 
-    id: 3, 
-    ip: '192.168.1.103', 
-    mac: '00:1A:2B:3C:4D:12', 
-    statut: 'en_attente', 
-    montant: 1500, 
-    duree: '6h', 
-    created_at: '2024-01-15 13:45:00',
-    nom: 'Laptop Marie',
-    type: 'Ordinateur',
-    utilisateur: 'Pierre Durand'
-  },
-  { 
-    id: 4, 
-    ip: '192.168.1.104', 
-    mac: '00:1A:2B:3C:4D:13', 
-    statut: 'en_attente', 
-    montant: 10000, 
-    duree: '7j', 
-    created_at: '2024-01-15 14:20:00',
-    nom: 'Tablet Salon',
-    type: 'Tablette',
-    utilisateur: 'Sophie Lambert'
-  },
-  { 
-    id: 5, 
-    ip: '192.168.1.105', 
-    mac: '00:1A:2B:3C:4D:14', 
-    statut: 'en_attente', 
-    montant: 25000, 
-    duree: '30j', 
-    created_at: '2024-01-15 15:10:00',
-    nom: 'Serveur NAS',
-    type: 'Serveur',
-    utilisateur: 'Admin Système'
-  },
-];
-
-// Options de durée pour les offres
-const dureeOptions = [
-  { value: '1h', label: '1 Heure', prix: 500 },
-  { value: '3h', label: '3 Heures', prix: 1000 },
-  { value: '6h', label: '6 Heures', prix: 1500 },
-  { value: '12h', label: '12 Heures', prix: 3000 },
-  { value: '24h', label: '24 Heures', prix: 5000 },
-  { value: '48h', label: '48 Heures', prix: 7500 },
-  { value: '7j', label: '7 Jours', prix: 10000 },
-  { value: '15j', label: '15 Jours', prix: 18000 },
-  { value: '30j', label: '30 Jours', prix: 25000 },
-  { value: 'illimite', label: 'Illimité', prix: 50000 },
-];
-
-// Options d'offres prédéfinies
-const offresOptions = [
-  { id: 1, nom: 'Offre Basique', duree: '6h', prix: 1500, description: 'Accès court pour besoins temporaires' },
-  { id: 2, nom: 'Offre Standard', duree: '24h', prix: 5000, description: 'Accès journalier standard' },
-  { id: 3, nom: 'Offre Weekend', duree: '48h', prix: 7500, description: 'Accès pour tout le weekend' },
-  { id: 4, nom: 'Offre Hebdo', duree: '7j', prix: 10000, description: 'Accès pour une semaine' },
-  { id: 5, nom: 'Offre Mensuelle', duree: '30j', prix: 25000, description: 'Accès pour un mois complet' },
-  { id: 6, nom: 'Offre Illimitée', duree: 'illimite', prix: 50000, description: 'Accès illimité' },
-];
+import { appareilService } from '../../../services/appareilService';
+import { offreService } from '../../../services/offreService';
 
 const AccesInternetPage = () => {
-  const [appareils, setAppareils] = useState(initialAppareils);
+  const [appareils, setAppareils] = useState([]);
+  const [offres, setOffres] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [searchTerm, setSearchTerm] = useState('');
   const [openActiverDialog, setOpenActiverDialog] = useState(null);
   const [openBloquerDialog, setOpenBloquerDialog] = useState(null);
-  
-  // États pour la configuration d'accès
+  const [loadingAction, setLoadingAction] = useState(false);
   const [selectedOffre, setSelectedOffre] = useState('');
   const [dureePersonnalisee, setDureePersonnalisee] = useState('24h');
   const [montantPersonnalise, setMontantPersonnalise] = useState(5000);
+  const [appareilDetails, setAppareilDetails] = useState(null);
+
+  // Options de durée pour les offres
+  const dureeOptions = [
+    { value: '1h', label: '1 Heure', prix: 500 },
+    { value: '3h', label: '3 Heures', prix: 1000 },
+    { value: '6h', label: '6 Heures', prix: 1500 },
+    { value: '12h', label: '12 Heures', prix: 3000 },
+    { value: '24h', label: '24 Heures', prix: 5000 },
+    { value: '48h', label: '48 Heures', prix: 7500 },
+    { value: '7j', label: '7 Jours', prix: 10000 },
+    { value: '15j', label: '15 Jours', prix: 18000 },
+    { value: '30j', label: '30 Jours', prix: 25000 },
+    { value: 'illimite', label: 'Illimité', prix: 50000 },
+  ];
+
+  // Charger les appareils et offres
+  const fetchAppareils = async () => {
+    setLoading(true);
+    try {
+      const response = await appareilService.getAll();
+      if (response.success) {
+        setAppareils(response.data);
+      }
+    } catch (error) {
+      console.error('Erreur chargement appareils:', error);
+      showSnackbar('Erreur lors du chargement des appareils', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchOffres = async () => {
+    try {
+      const response = await offreService.getAll();
+      if (response.success) {
+        setOffres(response.data);
+      }
+    } catch (error) {
+      console.error('Erreur chargement offres:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchAppareils();
+    fetchOffres();
+  }, []);
+
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setOpenSnackbar(true);
+  };
+
+  // Scanner le réseau
+  const handleScanner = async () => {
+    setScanning(true);
+    try {
+      const response = await appareilService.scanner();
+      if (response.success) {
+        showSnackbar(response.message, 'success');
+        await fetchAppareils(); // Recharger la liste
+      }
+    } catch (error) {
+      console.error('Erreur scan:', error);
+      showSnackbar('Erreur lors du scan réseau', 'error');
+    } finally {
+      setScanning(false);
+    }
+  };
 
   // Filtrer seulement les appareils en attente
   const appareilsEnAttente = appareils.filter(a => a.statut === 'en_attente');
 
   const handleBloquer = (id) => {
-    setOpenBloquerDialog(id);
+    const appareil = getAppareilById(id);
+    if (appareil) {
+      setAppareilDetails(appareil);
+      setOpenBloquerDialog(id);
+    }
   };
 
   const handleActiver = (id) => {
     const appareil = getAppareilById(id);
     if (appareil) {
+      setAppareilDetails(appareil);
       setSelectedOffre('');
-      setDureePersonnalisee(appareil.duree || '24h');
-      setMontantPersonnalise(appareil.montant || 5000);
+      setDureePersonnalisee('24h');
+      setMontantPersonnalise(5000);
+      setOpenActiverDialog(id);
     }
-    setOpenActiverDialog(id);
   };
 
   const filteredAppareils = () => {
     return appareilsEnAttente.filter(appareil =>
-      appareil.ip.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      appareil.mac.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      appareil.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      appareil.utilisateur.toLowerCase().includes(searchTerm.toLowerCase())
+      (appareil.ip && appareil.ip.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (appareil.mac && appareil.mac.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (appareil.nom && appareil.nom.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (appareil.description && appareil.description.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   };
 
-  const confirmerActivation = () => {
-    if (openActiverDialog) {
-      const offre = offresOptions.find(o => o.id === parseInt(selectedOffre));
-      let duree, montant;
-      
-      if (selectedOffre && offre) {
-        duree = offre.duree;
-        montant = offre.prix;
-      } else {
-        duree = dureePersonnalisee;
-        montant = montantPersonnalise;
-      }
+  const confirmerActivation = async () => {
+    if (openActiverDialog && appareilDetails) {
+      setLoadingAction(true);
+      try {
+        let offreData = {};
+        
+        if (selectedOffre) {
+          const offre = offres.find(o => o.id === parseInt(selectedOffre));
+          if (offre) {
+            offreData = {
+              offre_id: offre.id,
+              duree: offre.duree,
+              montant: offre.montant
+            };
+          }
+        } else {
+          // Offre personnalisée
+          const dureeOption = dureeOptions.find(opt => opt.value === dureePersonnalisee);
+          offreData = {
+            duree: dureePersonnalisee,
+            montant: montantPersonnalise,
+            description: `Accès personnalisé: ${dureeOption ? dureeOption.label : dureePersonnalisee}`
+          };
+        }
 
-      // Simuler la mise à jour
-      setAppareils(prevAppareils => 
-        prevAppareils.filter(appareil => appareil.id !== openActiverDialog)
-      );
-      
-      setOpenActiverDialog(null);
-      setSnackbarMessage('Accès internet activé avec succès');
-      setOpenSnackbar(true);
+        const response = await appareilService.activer(openActiverDialog, offreData);
+        
+        if (response.success) {
+          showSnackbar(response.message, 'success');
+          // Retirer l'appareil de la liste des en attente
+          setAppareils(prev => prev.filter(a => a.id !== openActiverDialog));
+          
+          // Fermer le dialog
+          setOpenActiverDialog(null);
+          setAppareilDetails(null);
+          setSelectedOffre('');
+          setDureePersonnalisee('24h');
+          setMontantPersonnalise(5000);
+        }
+      } catch (error) {
+        console.error('Erreur activation:', error);
+        showSnackbar('Erreur lors de l\'activation', 'error');
+      } finally {
+        setLoadingAction(false);
+      }
     }
   };
 
-  const confirmerBlocage = () => {
+  const confirmerBlocage = async () => {
     if (openBloquerDialog) {
-      // Simuler la suppression
-      setAppareils(prevAppareils => 
-        prevAppareils.filter(appareil => appareil.id !== openBloquerDialog)
-      );
-      
-      setOpenBloquerDialog(null);
-      setSnackbarMessage('Appareil bloqué avec succès');
-      setOpenSnackbar(true);
+      setLoadingAction(true);
+      try {
+        const response = await appareilService.bloquer(openBloquerDialog);
+        
+        if (response.success) {
+          showSnackbar(response.message, 'success');
+          // Retirer l'appareil de la liste
+          setAppareils(prev => prev.filter(a => a.id !== openBloquerDialog));
+          
+          setOpenBloquerDialog(null);
+          setAppareilDetails(null);
+        }
+      } catch (error) {
+        console.error('Erreur blocage:', error);
+        showSnackbar('Erreur lors du blocage', 'error');
+      } finally {
+        setLoadingAction(false);
+      }
     }
   };
 
@@ -216,10 +248,10 @@ const AccesInternetPage = () => {
     setSelectedOffre(offreId);
     
     if (offreId) {
-      const offre = offresOptions.find(o => o.id === parseInt(offreId));
+      const offre = offres.find(o => o.id === parseInt(offreId));
       if (offre) {
-        setDureePersonnalisee(offre.duree);
-        setMontantPersonnalise(offre.prix);
+        setDureePersonnalisee(offre.duree_formatee || '24h');
+        setMontantPersonnalise(offre.montant || 5000);
       }
     }
   };
@@ -236,37 +268,103 @@ const AccesInternetPage = () => {
   };
 
   const handleMontantChange = (event) => {
-    setMontantPersonnalise(event.target.value);
+    setMontantPersonnalise(parseFloat(event.target.value) || 0);
   };
 
   const calculerTotal = () => {
-    return selectedOffre ? 
-           offresOptions.find(o => o.id === parseInt(selectedOffre))?.prix || 0 : 
-           montantPersonnalise;
+    if (selectedOffre) {
+      const offre = offres.find(o => o.id === parseInt(selectedOffre));
+      return offre ? offre.montant : 0;
+    }
+    return montantPersonnalise || 0;
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '400px' 
+      }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Chargement des appareils...</Typography>
+      </Box>
+    );
+  }
+
   return (
-    <Box sx={{ p: 0 }}>
-      {/* En-tête */}
-      <Box sx={{ mb: 0 }}>
+    <Box sx={{ p: 3 }}>
+      {/* En-tête avec bouton scanner */}
+      <Box sx={{ mb: 3 }}>
         <Box sx={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center', 
-          mb: 3
+          mb: 3,
+          flexWrap: 'wrap',
+          gap: 2
         }}>
           <Box>
-            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
               Demande d'Accès Internet
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Gérez les demandes d'accès internet des appareils
+              Gérez les demandes d'accès internet des appareils détectés
             </Typography>
           </Box>
+          
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={fetchAppareils}
+              disabled={loading}
+            >
+              Actualiser
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<CachedIcon />}
+              onClick={handleScanner}
+              disabled={scanning}
+              sx={{ borderRadius: 1 }}
+            >
+              {scanning ? 'Scan en cours...' : 'Scanner le réseau'}
+            </Button>
+          </Box>
+        </Box>
+
+        {/* Statistiques */}
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 2, 
+          mb: 3,
+          flexWrap: 'wrap' 
+        }}>
           <Chip
             icon={<HourglassEmptyIcon />}
             label={`${appareilsEnAttente.length} appareil(s) en attente`}
             color="warning"
+            sx={{ fontWeight: 600 }}
+          />
+          <Chip
+            icon={<ComputerIcon />}
+            label={`${appareils.length} appareil(s) total`}
+            variant="outlined"
             sx={{ fontWeight: 600 }}
           />
         </Box>
@@ -274,7 +372,7 @@ const AccesInternetPage = () => {
         {/* Barre de recherche */}
         <TextField
           fullWidth
-          placeholder="Rechercher par IP, MAC, nom ou utilisateur..."
+          placeholder="Rechercher par IP, MAC, nom ou description..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           sx={{ mb: 3 }}
@@ -289,7 +387,7 @@ const AccesInternetPage = () => {
       </Box>
 
       {/* Tableau des appareils en attente */}
-      <Paper sx={{ borderRadius: 1, overflow: 'hidden', mb: 3 }}>
+      <Paper sx={{ borderRadius: 2, overflow: 'hidden', mb: 3, boxShadow: 2 }}>
         <Box sx={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
@@ -309,58 +407,62 @@ const AccesInternetPage = () => {
         </Box>
         
         {appareilsEnAttente.length === 0 ? (
-          <Box sx={{ p: 4, textAlign: 'center' }}>
+          <Box sx={{ p: 6, textAlign: 'center' }}>
             <CheckCircleIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
-            <Typography variant="h6" color="text.secondary">
-              Aucune demande en attente
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              Aucun appareil en attente
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Toutes les demandes d'accès ont été traitées
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Tous les appareils ont été traités ou aucun n'a été détecté.
             </Typography>
+            <Button
+              variant="contained"
+              startIcon={<CachedIcon />}
+              onClick={handleScanner}
+              disabled={scanning}
+            >
+              Scanner le réseau pour détecter des appareils
+            </Button>
           </Box>
         ) : (
           <TableContainer>
             <Table>
               <TableHead>
-                <TableRow>
-                  <TableCell>Appareil</TableCell>
-                  <TableCell>Utilisateur</TableCell>
-                  <TableCell>Adresse IP</TableCell>
-                  <TableCell>Adresse MAC</TableCell>
-                  <TableCell>Statut</TableCell>
-                  <TableCell>Date demande</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                <TableRow sx={{ bgcolor: 'background.default' }}>
+                  <TableCell sx={{ fontWeight: 600 }}>Appareil</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Adresse IP</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Adresse MAC</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Statut</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Date détection</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredAppareils().map((appareil) => (
-                  <TableRow key={appareil.id} hover>
+                  <TableRow key={appareil.id} hover sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <ComputerIcon fontSize="small" color="action" />
                         <Box>
-                          <Typography>
-                            {appareil.nom}
+                          <Typography fontWeight={500}>
+                            {appareil.nom || 'Appareil inconnu'}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {appareil.type}
-                          </Typography>
+                          {appareil.description && (
+                            <Typography variant="caption" color="text.secondary">
+                              {appareil.description}
+                            </Typography>
+                          )}
                         </Box>
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Typography>
-                        {appareil.utilisateur}
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        {appareil.ip || 'N/A'}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2">
-                        {appareil.ip}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {appareil.mac}
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        {appareil.mac || 'N/A'}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -374,10 +476,7 @@ const AccesInternetPage = () => {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
-                        {new Date(appareil.created_at).toLocaleDateString()}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {new Date(appareil.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        {formatDate(appareil.created_at)}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
@@ -389,6 +488,7 @@ const AccesInternetPage = () => {
                             size="small"
                             startIcon={<WifiIcon />}
                             onClick={() => handleActiver(appareil.id)}
+                            disabled={loadingAction}
                           >
                             Activer
                           </Button>
@@ -400,6 +500,7 @@ const AccesInternetPage = () => {
                             size="small"
                             startIcon={<BlockIcon />}
                             onClick={() => handleBloquer(appareil.id)}
+                            disabled={loadingAction}
                           >
                             Bloquer
                           </Button>
@@ -418,13 +519,19 @@ const AccesInternetPage = () => {
       <Dialog
         open={openActiverDialog !== null}
         onClose={() => {
-          setOpenActiverDialog(null);
-          setSelectedOffre('');
-          setDureePersonnalisee('24h');
-          setMontantPersonnalise(5000);
+          if (!loadingAction) {
+            setOpenActiverDialog(null);
+            setAppareilDetails(null);
+            setSelectedOffre('');
+            setDureePersonnalisee('24h');
+            setMontantPersonnalise(5000);
+          }
         }}
         maxWidth="sm"
         fullWidth
+        PaperProps={{
+          sx: { borderRadius: 2 }
+        }}
       >
         <DialogTitle sx={{ 
           display: 'flex', 
@@ -437,7 +544,7 @@ const AccesInternetPage = () => {
           Activer l'accès internet
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          {openActiverDialog && (
+          {appareilDetails && (
             <>
               <Grid container spacing={2}>
                 <Grid item xs={12}>
@@ -446,44 +553,62 @@ const AccesInternetPage = () => {
                   </Typography>
                   <Stack spacing={1}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography color="text.secondary">Appareil</Typography>
-                      <Typography>{getAppareilById(openActiverDialog)?.nom}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography color="text.secondary">Utilisateur</Typography>
-                      <Typography>{getAppareilById(openActiverDialog)?.utilisateur}</Typography>
+                      <Typography color="text.secondary">Nom</Typography>
+                      <Typography fontWeight={500}>{appareilDetails.nom || 'Inconnu'}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography color="text.secondary">Adresse IP</Typography>
-                      <Typography>{getAppareilById(openActiverDialog)?.ip}</Typography>
+                      <Typography sx={{ fontFamily: 'monospace' }}>{appareilDetails.ip}</Typography>
                     </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography color="text.secondary">Adresse MAC</Typography>
+                      <Typography sx={{ fontFamily: 'monospace' }}>{appareilDetails.mac || 'N/A'}</Typography>
+                    </Box>
+                    {appareilDetails.description && (
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography color="text.secondary">Description</Typography>
+                        <Typography>{appareilDetails.description}</Typography>
+                      </Box>
+                    )}
                   </Stack>
                 </Grid>
                 <Grid item xs={12}>
                   <Divider />
                 </Grid>
-                <Grid item xs={12}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>
-                    Offres prédéfinies
-                  </Typography>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Choisir une offre</InputLabel>
-                    <Select
-                      value={selectedOffre}
-                      label="Choisir une offre"
-                      onChange={handleOffreChange}
-                    >
-                      <MenuItem value="">
-                        <em>Aucune offre sélectionnée</em>
-                      </MenuItem>
-                      {offresOptions.map((offre) => (
-                        <MenuItem key={offre.id} value={offre.id}>
-                          {offre.nom} ({offre.duree} - {offre.prix.toLocaleString()} FCFA)
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
+                
+                {offres.length > 0 && (
+                  <>
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>
+                        Offres disponibles
+                      </Typography>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Choisir une offre</InputLabel>
+                        <Select
+                          value={selectedOffre}
+                          label="Choisir une offre"
+                          onChange={handleOffreChange}
+                          disabled={loadingAction}
+                        >
+                          <MenuItem value="">
+                            <em>Aucune offre sélectionnée</em>
+                          </MenuItem>
+                          {offres.map((offre) => (
+                            <MenuItem key={offre.id} value={offre.id}>
+                              {offre.nom} ({offre.duree_formatee} - {offre.montant_formate})
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Typography variant="body2" color="text.secondary" align="center">
+                        OU
+                      </Typography>
+                    </Grid>
+                  </>
+                )}
+                
                 <Grid item xs={12}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>
                     Personnaliser l'accès
@@ -494,10 +619,11 @@ const AccesInternetPage = () => {
                       value={dureePersonnalisee}
                       label="Durée d'accès"
                       onChange={handleDureeChange}
+                      disabled={loadingAction || selectedOffre}
                     >
                       {dureeOptions.map((option) => (
                         <MenuItem key={option.value} value={option.value}>
-                          {option.label} ({option.prix.toLocaleString()} FCFA)
+                          {option.label} ({option.prix.toLocaleString()} MGA)
                         </MenuItem>
                       ))}
                     </Select>
@@ -505,12 +631,13 @@ const AccesInternetPage = () => {
                   <TextField
                     fullWidth
                     size="small"
-                    label="Montant personnalisé (FCFA)"
+                    label="Montant personnalisé (MGA)"
                     type="number"
                     value={montantPersonnalise}
                     onChange={handleMontantChange}
+                    disabled={loadingAction || selectedOffre}
                     InputProps={{
-                      startAdornment: <InputAdornment position="start">FCFA</InputAdornment>,
+                      startAdornment: <InputAdornment position="start">MGA</InputAdornment>,
                     }}
                   />
                 </Grid>
@@ -527,38 +654,41 @@ const AccesInternetPage = () => {
                       Total à payer
                     </Typography>
                     <Typography variant="h6" color="primary">
-                      {calculerTotal().toLocaleString()} FCFA
+                      {calculerTotal().toLocaleString()} MGA
                     </Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={12}>
                   <Alert severity="info">
                     L'accès internet sera activé immédiatement après confirmation.
+                    L'appareil sera retiré de la liste des en attente.
                   </Alert>
                 </Grid>
               </Grid>
             </>
           )}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
           <Button 
             onClick={() => {
               setOpenActiverDialog(null);
+              setAppareilDetails(null);
               setSelectedOffre('');
               setDureePersonnalisee('24h');
               setMontantPersonnalise(5000);
             }}
             startIcon={<CancelIcon />}
+            disabled={loadingAction}
           >
             Annuler
           </Button>
           <Button 
             variant="contained" 
             onClick={confirmerActivation}
-            startIcon={<CheckIcon />}
-            disabled={!selectedOffre && (!dureePersonnalisee || !montantPersonnalise)}
+            startIcon={loadingAction ? <CircularProgress size={20} color="inherit" /> : <CheckIcon />}
+            disabled={loadingAction || (!selectedOffre && (!dureePersonnalisee || !montantPersonnalise))}
           >
-            Confirmer l'activation
+            {loadingAction ? 'Traitement...' : 'Confirmer l\'activation'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -566,9 +696,12 @@ const AccesInternetPage = () => {
       {/* Modal de blocage */}
       <Dialog
         open={openBloquerDialog !== null}
-        onClose={() => setOpenBloquerDialog(null)}
+        onClose={() => !loadingAction && setOpenBloquerDialog(null)}
         maxWidth="xs"
         fullWidth
+        PaperProps={{
+          sx: { borderRadius: 2 }
+        }}
       >
         <DialogTitle sx={{ 
           display: 'flex', 
@@ -581,7 +714,7 @@ const AccesInternetPage = () => {
           Refuser l'accès internet
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          {openBloquerDialog && (
+          {appareilDetails && (
             <>
               <Alert severity="warning" sx={{ mb: 2 }}>
                 L'appareil n'aura pas accès à internet et devra redemander l'accès.
@@ -592,30 +725,48 @@ const AccesInternetPage = () => {
                     Appareil concerné
                   </Typography>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography color="text.secondary">Appareil</Typography>
-                    <Typography>{getAppareilById(openBloquerDialog)?.nom}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography color="text.secondary">Utilisateur</Typography>
-                    <Typography>{getAppareilById(openBloquerDialog)?.utilisateur}</Typography>
+                    <Typography color="text.secondary">Nom</Typography>
+                    <Typography fontWeight={500}>{appareilDetails.nom || 'Inconnu'}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography color="text.secondary">Adresse IP</Typography>
-                    <Typography>{getAppareilById(openBloquerDialog)?.ip}</Typography>
+                    <Typography sx={{ fontFamily: 'monospace' }}>{appareilDetails.ip}</Typography>
                   </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography color="text.secondary">Adresse MAC</Typography>
+                    <Typography sx={{ fontFamily: 'monospace' }}>{appareilDetails.mac || 'N/A'}</Typography>
+                  </Box>
+                  {appareilDetails.description && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography color="text.secondary">Description</Typography>
+                      <Typography>{appareilDetails.description}</Typography>
+                    </Box>
+                  )}
                 </Stack>
                 <Divider />
                 <Alert severity="info">
                   L'utilisateur pourra faire une nouvelle demande d'accès ultérieurement.
+                  L'appareil sera retiré de la liste des en attente.
                 </Alert>
               </Stack>
             </>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenBloquerDialog(null)}>Annuler</Button>
-          <Button variant="contained" color="error" onClick={confirmerBlocage}>
-            Confirmer le blocage
+          <Button 
+            onClick={() => setOpenBloquerDialog(null)}
+            disabled={loadingAction}
+          >
+            Annuler
+          </Button>
+          <Button 
+            variant="contained" 
+            color="error" 
+            onClick={confirmerBlocage}
+            disabled={loadingAction}
+            startIcon={loadingAction ? <CircularProgress size={20} color="inherit" /> : <BlockIcon />}
+          >
+            {loadingAction ? 'Traitement...' : 'Confirmer le blocage'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -623,26 +774,42 @@ const AccesInternetPage = () => {
       {/* Snackbar */}
       <Snackbar
         open={openSnackbar}
-        autoHideDuration={3000}
+        autoHideDuration={4000}
         onClose={() => setOpenSnackbar(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
         <Alert 
           onClose={() => setOpenSnackbar(false)} 
-          severity="success"
+          severity={snackbarSeverity}
           sx={{ 
             borderRadius: 1,
-            alignItems: 'center'
+            alignItems: 'center',
+            minWidth: '300px'
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CheckIcon />
+            {snackbarSeverity === 'success' ? <CheckIcon /> : <ErrorIcon />}
             <Typography variant="body1">
               {snackbarMessage}
             </Typography>
           </Box>
         </Alert>
       </Snackbar>
+
+      {/* Backdrop pour les chargements */}
+      <Backdrop
+        sx={{ 
+          color: '#fff', 
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)'
+        }}
+        open={loadingAction}
+      >
+        <Box sx={{ textAlign: 'center' }}>
+          <CircularProgress color="inherit" size={60} />
+          <Typography sx={{ mt: 2 }}>Traitement en cours...</Typography>
+        </Box>
+      </Backdrop>
     </Box>
   );
 };

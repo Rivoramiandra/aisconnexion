@@ -1,252 +1,218 @@
-import React from 'react';
-import {
-    AppBar,
-    Toolbar,
-    Typography,
-    IconButton,
-    Box,
-    Avatar,
-    Menu,
-    MenuItem,
-    Tooltip,
-    Divider,
-    Badge,
+import React, { useState } from 'react';
+import { 
+  AppBar, 
+  Toolbar, 
+  Typography, 
+  IconButton, 
+  Box, 
+  Avatar, 
+  Menu, 
+  MenuItem, 
+  Tooltip, 
+  Divider, 
+  Badge 
 } from '@mui/material';
-import {
-    Menu as MenuIcon,
-    Logout as LogoutIcon,
-    Person as PersonIcon,
-    Settings as SettingsIcon,
-    Notifications as NotificationsIcon,
-    Mail as MailIcon,
-} from '@mui/icons-material';
+import { 
+  BiMenu, 
+  BiBell, 
+  BiEnvelope, 
+  BiUserCircle, 
+  BiCog, 
+  BiLogOut, 
+  BiChevronDown 
+} from 'react-icons/bi';
 import { useAuth } from '../../context/AuthContext';
 
 const EnteteDashboard = ({ basculerMenuLateral }) => {
-    const { user, logout } = useAuth();
-    const [anchorEl, setAnchorEl] = React.useState(null);
-    const [notificationAnchor, setNotificationAnchor] = React.useState(null);
-    const open = Boolean(anchorEl);
-    const notificationOpen = Boolean(notificationAnchor);
+  const { user, logout } = useAuth();
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [notificationAnchor, setNotificationAnchor] = useState(null);
+  const open = Boolean(anchorEl);
+  const notificationOpen = Boolean(notificationAnchor);
 
-    const handleMenuOpen = (event) => {
-        setAnchorEl(event.currentTarget);
-    };
+  const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
+  const handleNotificationOpen = (event) => setNotificationAnchor(event.currentTarget);
+  const handleNotificationClose = () => setNotificationAnchor(null);
 
-    const handleMenuClose = () => {
-        setAnchorEl(null);
-    };
+  const handleLogout = () => {
+    logout();
+    handleMenuClose();
+  };
 
-    const handleNotificationOpen = (event) => {
-        setNotificationAnchor(event.currentTarget);
-    };
+  const getInitiales = (nom) => {
+    if (!nom) return 'U';
+    return nom.split(' ').map(mot => mot[0]).join('').toUpperCase().slice(0, 2);
+  };
 
-    const handleNotificationClose = () => {
-        setNotificationAnchor(null);
-    };
+  const notifications = [
+    { id: 1, text: 'Nouvel appareil détecté', time: '2 min' },
+    { id: 2, text: 'Mise à jour système v2.4', time: '1 heure' },
+  ];
 
-    const handleLogout = () => {
-        logout();
-        handleMenuClose();
-    };
+  return (
+    <AppBar 
+      position="fixed" 
+      sx={{ 
+        zIndex: (theme) => theme.zIndex.drawer + 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        backdropFilter: 'blur(12px)',
+        color: '#1e293b',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+        borderBottom: '1px solid #e2e8f0',
+      }}
+    >
+      <Toolbar sx={{ justifyContent: 'space-between', minHeight: '70px !important' }}>
+        {/* Partie gauche */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <IconButton
+            onClick={basculerMenuLateral}
+            sx={{ color: '#64748b', display: { sm: 'none' } }}
+          >
+            <BiMenu size={24} />
+          </IconButton>
 
-    const getInitiales = (nom) => {
-        if (!nom) return 'U';
-        return nom
-            .split(' ')
-            .map(mot => mot[0])
-            .join('')
-            .toUpperCase()
-            .slice(0, 2);
-    };
-
-    const notifications = [
-        { id: 1, text: 'Nouveau message reçu', time: '2 min' },
-        { id: 2, text: 'Mise à jour système disponible', time: '1 heure' },
-        { id: 3, text: 'Votre rapport est prêt', time: 'Hier' },
-    ];
-
-    return (
-        <AppBar 
-            position="fixed" 
+          <Typography
+            variant="h6"
             sx={{ 
-                zIndex: (theme) => theme.zIndex.drawer + 1,
-                backgroundColor: 'background.paper',
-                color: 'text.primary',
-                boxShadow: 1,
-                borderBottom: '1px solid',
-                borderColor: 'divider',
+              fontWeight: 800, 
+              letterSpacing: '-0.5px',
+              color: '#1e293b'
             }}
+          >
+            AIS <span style={{ fontWeight: 500, fontSize: '14px', color: '#2563eb' }}>• IoT Dashboard</span>
+          </Typography>
+        </Box>
+
+        {/* Partie droite */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
+          
+          {/* Notifications & Messages */}
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <IconButton onClick={handleNotificationOpen} sx={styles.iconButton}>
+              <Badge badgeContent={notifications.length} color="error">
+                <BiBell size={22} />
+              </Badge>
+            </IconButton>
+
+            <IconButton sx={styles.iconButton}>
+              <Badge badgeContent={1} color="primary">
+                <BiEnvelope size={22} />
+              </Badge>
+            </IconButton>
+          </Box>
+
+          <Divider orientation="vertical" flexItem sx={{ mx: 1, height: '24px', alignSelf: 'center' }} />
+
+          {/* Profil utilisateur */}
+          <Box 
+            onClick={handleMenuOpen}
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 1.5, 
+              cursor: 'pointer',
+              padding: '6px 12px',
+              borderRadius: '12px',
+              transition: '0.2s',
+              '&:hover': { bgcolor: '#f1f5f9' }
+            }}
+          >
+            <Avatar
+              sx={{
+                width: 36,
+                height: 36,
+                bgcolor: '#2563eb',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+              }}
+            >
+              {getInitiales(user?.name)}
+            </Avatar>
+            
+            <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+              <Typography sx={{ fontSize: '14px', fontWeight: 600, color: '#1e293b', lineHeight: 1 }}>
+                {user?.name || 'Utilisateur'}
+              </Typography>
+              <Typography sx={{ fontSize: '12px', color: '#64748b', mt: 0.5 }}>
+                {user?.role || 'Administrateur'}
+              </Typography>
+            </Box>
+            <BiChevronDown color="#94a3b8" />
+          </Box>
+        </Box>
+
+        {/* Menu Notifications */}
+        <Menu
+          anchorEl={notificationAnchor}
+          open={notificationOpen}
+          onClose={handleNotificationClose}
+          PaperProps={{ sx: styles.menuPaper }}
+          transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+          anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         >
-            <Toolbar sx={{ justifyContent: 'space-between' }}>
-                {/* Partie gauche */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    {/* Bouton menu mobile */}
-                    <IconButton
-                        color="inherit"
-                        edge="start"
-                        onClick={basculerMenuLateral}
-                        sx={{ display: { sm: 'none' } }}
-                    >
-                        <MenuIcon />
-                    </IconButton>
+          <Box sx={{ p: 2, borderBottom: '1px solid #f1f5f9' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Notifications</Typography>
+          </Box>
+          {notifications.map((n) => (
+            <MenuItem key={n.id} onClick={handleNotificationClose} sx={styles.menuItem}>
+              <Box>
+                <Typography sx={{ fontSize: '13px', color: '#1e293b' }}>{n.text}</Typography>
+                <Typography sx={{ fontSize: '11px', color: '#94a3b8' }}>{n.time}</Typography>
+              </Box>
+            </MenuItem>
+          ))}
+        </Menu>
 
-                    {/* Logo/Titre */}
-                    <Typography
-                        variant="h6"
-                        component="div"
-                        sx={{ 
-                            fontWeight: 600,
-                            color: 'primary.main',
-                            display: { xs: 'none', sm: 'block' },
-                        }}
-                    >
-                        AIS – Accès Control Internet
-                    </Typography>
-                </Box>
+        {/* Menu Compte */}
+        <Menu
+          anchorEl={anchorEl}
+          open={open}
+          onClose={handleMenuClose}
+          PaperProps={{ sx: styles.menuPaper }}
+          transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+          anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+        >
+          <MenuItem onClick={handleMenuClose} sx={styles.menuItem}>
+            <BiUserCircle size={20} style={{ marginRight: '12px', color: '#2563eb' }} />
+            Mon Profil
+          </MenuItem>
+          <MenuItem onClick={handleMenuClose} sx={styles.menuItem}>
+            <BiCog size={20} style={{ marginRight: '12px', color: '#64748b' }} />
+            Paramètres
+          </MenuItem>
+          <Divider sx={{ my: 1 }} />
+          <MenuItem onClick={handleLogout} sx={{ ...styles.menuItem, color: '#ef4444' }}>
+            <BiLogOut size={20} style={{ marginRight: '12px' }} />
+            Déconnexion
+          </MenuItem>
+        </Menu>
+      </Toolbar>
+    </AppBar>
+  );
+};
 
-                {/* Partie droite */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    {/* Notifications */}
-                    <Tooltip title="Notifications">
-                        <IconButton
-                            onClick={handleNotificationOpen}
-                            color="inherit"
-                            size="small"
-                        >
-                            <Badge badgeContent={3} color="error">
-                                <NotificationsIcon />
-                            </Badge>
-                        </IconButton>
-                    </Tooltip>
-
-                    {/* Messages */}
-                    <Tooltip title="Messages">
-                        <IconButton color="inherit" size="small">
-                            <Badge badgeContent={1} color="error">
-                                <MailIcon />
-                            </Badge>
-                        </IconButton>
-                    </Tooltip>
-
-                    {/* Séparateur */}
-                    <Divider orientation="vertical" flexItem />
-
-                    {/* Profil utilisateur */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ textAlign: 'right', display: { xs: 'none', md: 'block' } }}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                {user?.name}
-                            </Typography>
-                            <Typography variant="caption" color="textSecondary">
-                                {user?.email}
-                            </Typography>
-                        </Box>
-
-                        <Tooltip title="Mon compte">
-                            <IconButton
-                                onClick={handleMenuOpen}
-                                size="small"
-                                aria-controls={open ? 'menu-compte' : undefined}
-                                aria-haspopup="true"
-                                aria-expanded={open ? 'true' : undefined}
-                            >
-                                <Avatar
-                                    sx={{
-                                        width: 36,
-                                        height: 36,
-                                        bgcolor: 'primary.main',
-                                        fontSize: '0.875rem',
-                                        fontWeight: 600,
-                                    }}
-                                >
-                                    {getInitiales(user?.name)}
-                                </Avatar>
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
-                </Box>
-
-                {/* Menu notifications */}
-                <Menu
-                    anchorEl={notificationAnchor}
-                    open={notificationOpen}
-                    onClose={handleNotificationClose}
-                    PaperProps={{
-                        elevation: 3,
-                        sx: {
-                            mt: 1.5,
-                            minWidth: 320,
-                            maxHeight: 400,
-                        },
-                    }}
-                >
-                    <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            Notifications
-                        </Typography>
-                    </Box>
-                    {notifications.map((notification) => (
-                        <MenuItem key={notification.id} onClick={handleNotificationClose}>
-                            <Box sx={{ width: '100%' }}>
-                                <Typography variant="body2">{notification.text}</Typography>
-                                <Typography variant="caption" color="textSecondary">
-                                    {notification.time}
-                                </Typography>
-                            </Box>
-                        </MenuItem>
-                    ))}
-                    <Divider />
-                    <MenuItem onClick={handleNotificationClose}>
-                        <Typography variant="body2" color="primary" sx={{ textAlign: 'center', width: '100%' }}>
-                            Voir toutes les notifications
-                        </Typography>
-                    </MenuItem>
-                </Menu>
-
-                {/* Menu compte */}
-                <Menu
-                    anchorEl={anchorEl}
-                    id="menu-compte"
-                    open={open}
-                    onClose={handleMenuClose}
-                    PaperProps={{
-                        elevation: 3,
-                        sx: {
-                            mt: 1.5,
-                            minWidth: 200,
-                        },
-                    }}
-                >
-                    <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-                        <Typography variant="subtitle1" fontWeight={600}>
-                            {user?.name}
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                            {user?.email}
-                        </Typography>
-                    </Box>
-                    
-                    <MenuItem onClick={handleMenuClose}>
-                        <PersonIcon sx={{ mr: 2, fontSize: 20 }} />
-                        Mon profil
-                    </MenuItem>
-                    
-                    <MenuItem onClick={handleMenuClose}>
-                        <SettingsIcon sx={{ mr: 2, fontSize: 20 }} />
-                        Paramètres
-                    </MenuItem>
-                    
-                    <Divider />
-                    
-                    <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
-                        <LogoutIcon sx={{ mr: 2, fontSize: 20 }} />
-                        Déconnexion
-                    </MenuItem>
-                </Menu>
-            </Toolbar>
-        </AppBar>
-    );
+const styles = {
+  iconButton: {
+    color: '#64748b',
+    borderRadius: '10px',
+    '&:hover': { bgcolor: '#f1f5f9', color: '#2563eb' }
+  },
+  menuPaper: {
+    backgroundColor: '#fff',
+    borderRadius: '16px',
+    mt: 1,
+    minWidth: 220,
+    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+    border: '1px solid #e2e8f0',
+  },
+  menuItem: {
+    fontSize: '14px',
+    py: 1.5,
+    px: 2,
+    color: '#475569',
+    '&:hover': { bgcolor: '#f8fafc', color: '#2563eb' }
+  }
 };
 
 export default EnteteDashboard;
